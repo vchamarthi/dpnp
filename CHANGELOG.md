@@ -47,6 +47,7 @@ Also, that release drops support for Python 3.9, making Python 3.10 the minimum 
 * Clarified behavior on repeated `axes` in `dpnp.tensordot` and `dpnp.linalg.tensordot` functions [#2733](https://github.com/IntelPython/dpnp/pull/2733)
 * Improved documentation of `file` argument in `dpnp.fromfile` [#2745](https://github.com/IntelPython/dpnp/pull/2745)
 * Aligned `dpnp.trim_zeros` with NumPy 2.4 to support a tuple of integers passed with `axis` keyword [#2746](https://github.com/IntelPython/dpnp/pull/2746)
+* Extended `dpnp.nan_to_num` to support broadcasting of `nan`, `posinf`, and `neginf` keywords [#2754](https://github.com/IntelPython/dpnp/pull/2754)
 
 ### Deprecated
 
