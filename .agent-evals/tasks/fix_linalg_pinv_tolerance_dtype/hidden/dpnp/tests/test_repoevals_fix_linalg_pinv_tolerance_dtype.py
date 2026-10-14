@@ -15,7 +15,10 @@ def test_pinv_default_tolerance_single_precision(dtype, hermitian):
     result = dpnp.linalg.pinv(a, hermitian=hermitian)
     assert result.dtype == dtype
     assert_allclose(
-        dpnp.asnumpy(result), numpy.diag([1.0, 0.0]), atol=1e-5, rtol=1e-5
+        dpnp.asnumpy(result),
+        numpy.diag([1.0, 0.0]).astype(result.dtype),
+        atol=1e-5,
+        rtol=1e-5,
     )
 
 
@@ -28,7 +31,9 @@ def test_pinv_default_tolerance_single_precision_batch(dtype):
         [numpy.diag([0.5, 0.0, 1.0]), numpy.diag([0.0, 0.25, 1.0])]
     )
     result = dpnp.linalg.pinv(ia)
-    assert_allclose(dpnp.asnumpy(result), expected, atol=1e-5, rtol=1e-5)
+    assert_allclose(
+        dpnp.asnumpy(result), expected.astype(result.dtype), atol=1e-5, rtol=1e-5
+    )
 
 
 @pytest.mark.parametrize("dtype", [dpnp.float32, dpnp.complex64])
@@ -36,7 +41,7 @@ def test_pinv_explicit_tolerance_unchanged(dtype):
     a = dpnp.array(numpy.diag([1.0, 1e-3]), dtype=dtype)
     result = dpnp.linalg.pinv(a, rtol=1e-6)
     assert_allclose(
-        dpnp.asnumpy(result), numpy.diag([1.0, 1e3]), rtol=1e-4
+        dpnp.asnumpy(result), numpy.diag([1.0, 1e3]).astype(result.dtype), rtol=1e-4
     )
 
 
@@ -58,7 +63,7 @@ def test_pinv_non_empty_non_inexact_dtype(dtype):
     assert result.dtype == dpnp.default_float_type()
     assert_allclose(
         dpnp.asnumpy(result),
-        numpy.linalg.pinv(a.astype(numpy.float64)),
+        numpy.linalg.pinv(a.astype(numpy.float64)).astype(result.dtype),
         rtol=1e-4,
         atol=1e-5,
     )

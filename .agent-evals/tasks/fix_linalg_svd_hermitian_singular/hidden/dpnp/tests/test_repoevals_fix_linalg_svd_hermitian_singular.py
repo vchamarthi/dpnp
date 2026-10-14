@@ -16,8 +16,8 @@ def _dtypes():
 def _check_unitary(x):
     x = dpnp.asnumpy(x)
     n = x.shape[-1]
-    eye = numpy.broadcast_to(numpy.eye(n), x.shape)
     prod = x @ numpy.swapaxes(x, -1, -2).conj()
+    eye = numpy.broadcast_to(numpy.eye(n, dtype=prod.dtype), prod.shape)
     assert_allclose(prod, eye, atol=1e-5)
 
 
@@ -41,11 +41,13 @@ def test_hermitian_singular_vh_unitary(dtype, mat):
 
     # the decomposition still reconstructs the input
     rec = (dpnp.asnumpy(u) * dpnp.asnumpy(s)[..., None, :]) @ dpnp.asnumpy(vh)
-    assert_allclose(rec, a, atol=1e-5)
+    assert_allclose(rec, a.astype(rec.dtype), atol=1e-5)
 
     # singular values match NumPy
     assert_allclose(
-        dpnp.asnumpy(s), numpy.linalg.svd(a, compute_uv=False), atol=1e-5
+        dpnp.asnumpy(s),
+        numpy.linalg.svd(a, compute_uv=False).astype(dpnp.asnumpy(s).dtype),
+        atol=1e-5,
     )
 
 
@@ -59,7 +61,7 @@ def test_hermitian_singular_batch(dtype):
     u, s, vh = dpnp.linalg.svd(ia, hermitian=True)
     _check_unitary(vh)
     rec = (dpnp.asnumpy(u) * dpnp.asnumpy(s)[..., None, :]) @ dpnp.asnumpy(vh)
-    assert_allclose(rec, a, atol=1e-5)
+    assert_allclose(rec, a.astype(rec.dtype), atol=1e-5)
 
 
 def test_hermitian_singular_int_input():

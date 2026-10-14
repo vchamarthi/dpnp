@@ -18,6 +18,13 @@ timeout_sec = 1800
 [grader]
 type = "hidden_tests"
 targets = ["dpnp/tests/test_repoevals_fix_linalg_pinv_tolerance_dtype.py"]
-regression_targets = ["dpnp/tests/test_linalg.py::TestPinv"]
+# test_pinv_empty is excluded: the fix intentionally changes the result dtype it checks
+regression_targets = [
+  "dpnp/tests/test_linalg.py::TestPinv::test_pinv",
+  "dpnp/tests/test_linalg.py::TestPinv::test_pinv_hermitian",
+  "dpnp/tests/test_linalg.py::TestPinv::test_pinv_rtol",
+  "dpnp/tests/test_linalg.py::TestPinv::test_pinv_strides",
+  "dpnp/tests/test_linalg.py::TestPinv::test_pinv_errors",
+]
 root_cause_files = ["dpnp/linalg/dpnp_utils_linalg.py"]
 gate = ["strict_pass"]
