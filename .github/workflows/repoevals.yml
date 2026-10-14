@@ -18,6 +18,10 @@ on:
       repeats:
         description: "reference-solution repeats"
         default: "2"
+      measure:
+        description: "also run the scripted pipeline measurements (oracle, noop and cheating agents)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,4 +65,50 @@ jobs:
             ${{ runner.temp }}/check.json
             ${{ runner.temp }}/check/**/grade.json
             ${{ runner.temp }}/check/**/setup.log
+          if-no-files-found: ignore
+
+  measure:
+    # LLM-free measurement of the whole pipeline (prepare -> agent -> grade -> report) on real dpnp tasks,
+    # using scripted agents with known expected outcomes.
+    if: github.event_name == 'workflow_dispatch' && inputs.measure
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      ONEAPI_DEVICE_SELECTOR: opencl:cpu
+      REPOEVALS_RUNS_DIR: ${{ github.workspace }}/../repoevals-runs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch -q --no-tags https://github.com/IntelPython/dpnp.git 'refs/tags/*:refs/tags/*'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install -r .agent-evals/requirements.txt intel-opencl-rt \
+            "repoevals @ git+https://github.com/vchamarthi/repoevals@main"
+          P=$(python -c "import sys; print(sys.prefix)")
+          echo "OCL_ICD_FILENAMES=$P/lib/libintelocl.so" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$P/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+      - name: Run scripted agents
+        run: |
+          OUT="$RUNNER_TEMP/runs"
+          A="python $PWD/.agent-evals/probes/agent.py"
+          repoevals run --include-drafts --repeats 1 --agent noop --label noop --out "$OUT/noop"
+          repoevals run --include-drafts --repeats 2 --agent "cmd:$A oracle {prompt_file} {workspace}" --label oracle --out "$OUT/oracle"
+          for m in conftest weaken shadow; do
+            repoevals run --include-drafts --repeats 1 --agent "cmd:$A $m {prompt_file} {workspace}" --label "cheat-$m" --out "$OUT/cheat-$m" family:fix
+          done
+          repoevals report "$OUT" --out "$RUNNER_TEMP/report"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repoevals-measure
+          path: |
+            ${{ runner.temp }}/report/**
+            ${{ runner.temp }}/runs/**/grade.json
+            ${{ runner.temp }}/runs/**/meta.json
+            ${{ runner.temp }}/runs/**/run.json
+            ${{ runner.temp }}/runs/**/agent.diff
           if-no-files-found: ignore
