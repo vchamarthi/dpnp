@@ -51,19 +51,6 @@ def test_hermitian_singular_vh_unitary(dtype, mat):
     )
 
 
-@pytest.mark.parametrize("dtype", _dtypes())
-def test_hermitian_singular_batch(dtype):
-    a = numpy.array(
-        [[[1, 0], [0, 0]], [[0, 0], [0, 4]], [[3, 0], [0, -2]]], dtype=dtype
-    )
-    ia = dpnp.array(a)
-
-    u, s, vh = dpnp.linalg.svd(ia, hermitian=True)
-    _check_unitary(vh)
-    rec = (dpnp.asnumpy(u) * dpnp.asnumpy(s)[..., None, :]) @ dpnp.asnumpy(vh)
-    assert_allclose(rec, a.astype(rec.dtype), atol=1e-5)
-
-
 def test_hermitian_singular_int_input():
     ia = dpnp.array([[1, 0], [0, 0]])
     u, s, vh = dpnp.linalg.svd(ia, hermitian=True)

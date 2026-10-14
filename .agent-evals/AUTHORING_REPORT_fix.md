@@ -43,3 +43,9 @@ Regression targets: narrow existing classes at 0.20.0 (`TestBincount`, `TestMgri
 - Run `repoevals check --repeats 3` on Linux with the 0.20.0 wheel; nothing here has been executed.
 - Instructions name the expected error types/messages (insert message format, repeat ValueError) — judged as user-level expectations, review if too revealing.
 - `fix_logic_compare_pyint_overflow` divide expectations are my own (not upstream-tested).
+
+## Follow-up from `repoevals check` (CI)
+
+- `fix_linalg_svd_hermitian_singular`: the batched case was removed. With the reference fix at 0.20.0, `dpnp.linalg.svd(a, hermitian=True)` on a stack of three 2×2 matrices returned `vh` whose trailing axes do not form square matrices (`vh @ vh^H` has shape (2, 2, 2)). This may be a separate dpnp issue in the batched Hermitian path; investigate before turning it into a task.
+- `fix_linalg_pinv_tolerance_dtype`: expectations are now dtype-exact; `test_pinv_empty` is excluded from regression targets because the fix intentionally changes the dtype it checks.
+- Environment: NumPy pinned below 2.5 for the 0.20.0 environment.
