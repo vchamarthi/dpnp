@@ -1,0 +1,23 @@
+version = "1.0"
+
+[metadata]
+family = "fix"
+status = "draft"
+base = "51ba908112543574db96afa8f965639394a08715"
+created = "2026-06-18"
+source = "https://github.com/IntelPython/dpnp/pull/2954"
+difficulty = "medium"
+tags = ["linalg", "svd", "hermitian", "numerical"]
+
+[agent]
+timeout_sec = 3600
+
+[verifier]
+timeout_sec = 1800
+
+[grader]
+type = "hidden_tests"
+targets = ["dpnp/tests/test_repoevals_fix_linalg_svd_hermitian_singular.py"]
+regression_targets = ["dpnp/tests/test_linalg.py::TestSvd"]
+root_cause_files = ["dpnp/linalg/dpnp_utils_linalg.py"]
+gate = ["strict_pass"]

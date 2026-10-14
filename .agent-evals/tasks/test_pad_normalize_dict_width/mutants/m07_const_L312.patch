@@ -1,0 +1,12 @@
+diff --git a/dpnp/dpnp_utils/dpnp_utils_pad.py b/dpnp/dpnp_utils/dpnp_utils_pad.py
+--- a/dpnp/dpnp_utils/dpnp_utils_pad.py
++++ b/dpnp/dpnp_utils/dpnp_utils_pad.py
+@@ -309,7 +309,7 @@
+             seq[axis] = (width, width)
+         elif (
+             isinstance(width, tuple)
+-            and len(width) == 2
++            and len(width) == 3
+             and all(isinstance(w, int) for w in width)
+         ):
+             seq[axis] = width

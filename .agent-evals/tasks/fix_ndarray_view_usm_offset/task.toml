@@ -1,0 +1,23 @@
+version = "1.0"
+
+[metadata]
+family = "fix"
+status = "draft"
+base = "51ba908112543574db96afa8f965639394a08715"
+created = "2026-08-25"
+source = "https://github.com/IntelPython/dpnp/pull/3037"
+difficulty = "hard"
+tags = ["ndarray", "view", "usm", "memory-offset"]
+
+[agent]
+timeout_sec = 3600
+
+[verifier]
+timeout_sec = 1800
+
+[grader]
+type = "hidden_tests"
+targets = ["dpnp/tests/test_repoevals_fix_ndarray_view_usm_offset.py"]
+regression_targets = ["dpnp/tests/test_ndarray.py::TestView"]
+root_cause_files = ["dpnp/dpnp_array.py"]
+gate = ["strict_pass"]

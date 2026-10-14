@@ -1,0 +1,715 @@
+diff --git a/dpnp/dpnp_array.py b/dpnp/dpnp_array.py
+index 00a1b2d00e5..88384c07568 100644
+--- a/dpnp/dpnp_array.py
++++ b/dpnp/dpnp_array.py
+@@ -1278,9 +1278,37 @@ class dpnp_array:
+     @property
+     def flat(self):
+         """
+-        Return a flat iterator, or set a flattened version of self to value.
++        A 1-D iterator over the array.
+ 
+-        """  # noqa: D200
++        This is a :obj:`dpnp.flatiter` instance, which acts similarly to, but
++        is not a subclass of, Python's built-in iterator object.
++
++        For full documentation refer to :obj:`numpy.ndarray.flat`.
++
++        See Also
++        --------
++        :obj:`dpnp.flatiter` : Flat iterator object to iterate over arrays.
++        :obj:`dpnp.ndarray.flatten` : Return a flattened copy of the array.
++
++        Examples
++        --------
++        >>> import dpnp as np
++        >>> x = np.arange(1, 7).reshape(2, 3)
++        >>> x
++        array([[1, 2, 3],
++               [4, 5, 6]])
++        >>> x.flat[3]
++        array(4)
++        >>> x.T.flat[3]
++        array(5)
++
++        An assignment example:
++
++        >>> x.flat[[1, 4]] = 1; x
++        array([[1, 1, 3],
++               [4, 1, 6]])
++
++        """
+ 
+         return dpnp.flatiter(self)
+ 
+@@ -1313,7 +1341,7 @@ class dpnp_array:
+         See Also
+         --------
+         :obj:`dpnp.ravel` : Return a flattened array.
+-        :obj:`dpnp.flat` : A 1-D flat iterator over the array.
++        :obj:`dpnp.ndarray.flat` : A 1-D flat iterator over the array.
+ 
+         Examples
+         --------
+diff --git a/dpnp/dpnp_flatiter.py b/dpnp/dpnp_flatiter.py
+index 7375e03d802..b11a4a21215 100644
+--- a/dpnp/dpnp_flatiter.py
++++ b/dpnp/dpnp_flatiter.py
+@@ -28,63 +28,198 @@
+ 
+ """Implementation of flatiter."""
+ 
++import numpy
++
+ import dpnp
++import dpnp.tensor as dpt
++
++from .dpnp_array import dpnp_array
+ 
+ 
+ class flatiter:
+-    """Flat iterator object to iterate over arrays."""
++    """
++    Flat iterator object to iterate over arrays.
++
++    A flat iterator is returned by :obj:`dpnp.ndarray.flat` for any array. It
++    allows iterating over the array as if it were a 1-D array, either in a
++    for-loop or by calling its ``next`` method.
++
++    Iteration is done in row-major, C-style order (the last index varying the
++    fastest). The iterator can also be indexed using basic slicing or advanced
++    indexing.
++
++    For full documentation refer to :obj:`numpy.flatiter`.
++
++    See Also
++    --------
++    :obj:`dpnp.ndarray.flat` : Return a flat iterator over an array.
++    :obj:`dpnp.ndarray.flatten` : Return a flattened copy of an array.
++
++    Examples
++    --------
++    >>> import dpnp as np
++    >>> x = np.arange(6).reshape(2, 3)
++    >>> for item in x.flat:
++    ...     print(item)
++    0
++    1
++    2
++    3
++    4
++    5
++
++    >>> x.flat[2:4]
++    array([2, 3])
+ 
+-    def __init__(self, X):
+-        if type(X) is not dpnp.ndarray:
++    """
++
++    def __init__(self, a):
++        if not isinstance(a, dpnp_array):
+             raise TypeError(
+-                "Argument must be of type dpnp.ndarray, got {}".format(type(X))
++                f"An array must be of type dpnp.ndarray, but got {type(a)}"
++            )
++        self._arr = a
++        self._size = a.size
++        self._i = 0
++
++    def _validate_key(self, key):
++        # Ellipsis/slice/tuple need no validation here
++        if key is Ellipsis or isinstance(key, (slice, tuple)):
++            return
++
++        # a genuine scalar int (not bool, not an array): bounds-checked later
++        if (
++            not isinstance(key, bool)
++            and callable(getattr(key, "__index__", None))
++            and not hasattr(key, "ndim")
++        ):
++            return
++
++        if isinstance(key, dpnp_array):
++            idx = key
++        elif isinstance(key, dpt.usm_ndarray):
++            idx = dpnp_array._create_from_usm_ndarray(key)
++        else:
++            try:
++                idx = numpy.asarray(key)
++            except (TypeError, ValueError):
++                return  # let regular indexing raise
++
++        if dpnp.issubdtype(idx.dtype, dpnp.bool):
++            # only a boolean ndarray mask is valid; reject bool scalars/lists
++            if idx.ndim > 0 and not isinstance(key, list):
++                # an empty mask selects nothing; otherwise sizes must match
++                if idx.size not in (0, self._size):
++                    raise IndexError(
++                        "boolean index did not match indexed array along "
++                        f"axis 0; size of axis is {self._size} but size of "
++                        f"corresponding boolean axis is {idx.size}"
++                    )
++                return
++            raise IndexError("boolean indices for iterators are not supported")
++
++        if not dpnp.issubdtype(idx.dtype, dpnp.integer) or idx.size == 0:
++            return
++
++        # fancy int indices wrap instead of raising, so bounds-check
++        size = self._size
++        hi, lo = int(idx.max()), int(idx.min())
++        if hi >= size:
++            raise IndexError(f"index {hi} is out of bounds for size {size}")
++        if lo < -size:
++            raise IndexError(f"index {lo} is out of bounds for size {size}")
++
++    def _normalize_key(self, key):
++        # 1-D iterator: unwrap a 1-elem tuple; reject None and longer tuples
++        if isinstance(key, tuple) and len(key) == 1:
++            key = key[0]
++        if key is None or (isinstance(key, tuple) and len(key) > 1):
++            raise IndexError(
++                "only integers, slices (`:`), ellipsis (`...`) and integer "
++                "or boolean arrays are valid indices"
++            )
++        self._validate_key(key)
++        return key
++
++    def _scalar_pos(self, key):
++        # normalize a scalar flat index (wrap negatives) and bounds-check it
++        pos = key + self._size if key < 0 else key
++        if not 0 <= pos < self._size:
++            raise IndexError(
++                f"index {key} is out of bounds for size {self._size}"
+             )
+-        self.arr_ = X
+-        self.size_ = X.size
+-        self.i_ = 0
+-
+-    def _multiindex(self, i):
+-        nd = self.arr_.ndim
+-        if nd == 0:
+-            if i == 0:
+-                return ()
+-            raise KeyError
+-        elif nd == 1:
+-            return (i,)
+-        sh = self.arr_.shape
+-        i_ = i
+-        multi_index = [0] * nd
+-        for k in reversed(range(1, nd)):
+-            si = sh[k]
+-            q = i_ // si
+-            multi_index[k] = i_ - q * si
+-            i_ = q
+-        multi_index[0] = i_
+-        return tuple(multi_index)
++        return pos
+ 
+     def __getitem__(self, key):
+-        idx = getattr(key, "__index__", None)
+-        if not callable(idx):
+-            raise TypeError(key)
+-        i = idx()
+-        mi = self._multiindex(i)
+-        return self.arr_.__getitem__(mi)
++        key = self._normalize_key(key)
++
++        if isinstance(key, int) and not isinstance(key, bool):
++            # scalar fast path: index directly instead of flattening the array
++            pos = self._scalar_pos(key)
++            return self._arr[numpy.unravel_index(pos, self._arr.shape)].copy()
++
++        # flat always yields a copy, never a view
++        return dpnp.reshape(self._arr, -1)[key].copy()
+ 
+     def __setitem__(self, key, val):
+-        idx = getattr(key, "__index__", None)
+-        if not callable(idx):
+-            raise TypeError(key)
+-        i = idx()
+-        mi = self._multiindex(i)
+-        return self.arr_.__setitem__(mi, val)
++        key = self._normalize_key(key)
++
++        if isinstance(key, tuple) and len(key) == 0:
++            # NumPy rejects arr.flat[()] = val
++            raise IndexError(
++                "Assigning to a flat iterator with a 0-D index is not "
++                "supported"
++            )
++
++        a = self._arr
++        exec_q = a.sycl_queue
++        usm_type = a.usm_type
++
++        # resolve key to flat positions
++        if isinstance(key, int) and not isinstance(key, bool):
++            # scalar fast path: avoid building a full index array
++            pos = self._scalar_pos(key)
++            idx = dpnp.asarray(pos, sycl_queue=exec_q, usm_type=usm_type)
++        elif isinstance(key, slice):
++            # slice fast path: build only the selected positions
++            start, stop, step = key.indices(a.size)
++            idx = dpnp.arange(
++                start, stop, step, sycl_queue=exec_q, usm_type=usm_type
++            )
++        elif hasattr(key, "dtype") and dpnp.issubdtype(key.dtype, dpnp.bool):
++            # boolean mask fast path
++            mask = dpnp.asarray(key, sycl_queue=exec_q, usm_type=usm_type)
++            idx = dpnp.nonzero(mask)[0]
++        else:
++            flat_index = dpnp.arange(
++                a.size, sycl_queue=exec_q, usm_type=usm_type
++            )
++            idx = flat_index[key]
++
++        if not dpnp.isscalar(val):
++            val = dpnp.asarray(val, sycl_queue=exec_q, usm_type=usm_type)
++            if idx.ndim == 0 and val.ndim != 0:
++                # a scalar index targets a single item, reject an array value
++                raise ValueError("Error setting single item of array.")
++
++            val = val.ravel()
++            n = idx.size
++            if val.size and val.size != n:
++                # cycles the values over the selection
++                val = val[
++                    dpnp.arange(n, sycl_queue=exec_q, usm_type=usm_type)
++                    % val.size
++                ]
++
++        dpnp.put(a, idx, val)
+ 
+     def __iter__(self):
+         return self
+ 
+     def __next__(self):
+-        if self.i_ < self.size_:
+-            val = self.__getitem__(self.i_)
+-            self.i_ = self.i_ + 1
++        if self._i < self._size:
++            val = self.__getitem__(self._i)
++            self._i = self._i + 1
+             return val
+         else:
+             raise StopIteration
+diff --git a/dpnp/tests/test_flat.py b/dpnp/tests/test_flat.py
+index c40e95d3ee8..b71b5dc7a11 100644
+--- a/dpnp/tests/test_flat.py
++++ b/dpnp/tests/test_flat.py
+@@ -1,8 +1,11 @@
+ import numpy as np
+ import pytest
+-from numpy.testing import assert_array_equal, assert_raises
++from numpy.testing import assert_array_equal
+ 
+ import dpnp
++import dpnp.tensor as dpt
++
++from .third_party.cupy import testing
+ 
+ 
+ class TestFlatiter:
+@@ -12,41 +15,326 @@ class TestFlatiter:
+             (np.array([1, 0, 2, -3, -1, 2, 21, -9]), 0),
+             (np.arange(1, 7).reshape(2, 3), 3),
+             (np.arange(1, 7).reshape(2, 3).T, 3),
++            (np.arange(1, 7), -1),
++            (np.arange(1, 7).reshape(2, 3).T, -2),
+         ],
+-        ids=["1D array", "2D array", "2D.T array"],
++        ids=["1D array", "2D array", "2D.T array", "1D neg", "2D.T neg"],
+     )
+     def test_flat_getitem(self, a, index):
+-        a_dp = dpnp.array(a)
+-        result = a_dp.flat[index]
++        ia = dpnp.array(a)
++        result = ia.flat[index]
+         expected = a.flat[index]
+         assert_array_equal(expected, result)
+ 
+     def test_flat_iteration(self):
+         a = np.array([[1, 2], [3, 4]])
+-        a_dp = dpnp.array(a)
+-        for dp_val, np_val in zip(a_dp.flat, a.flat):
+-            assert dp_val == np_val
++        ia = dpnp.array(a)
++        result = list(ia.flat)
++        assert len(result) == a.size
++        for ival, val in zip(result, a.flat):
++            assert ival == val
+ 
+     def test_init_error(self):
+-        assert_raises(TypeError, dpnp.flatiter, [1, 2, 3])
++        with pytest.raises(TypeError, match="must be of type dpnp.ndarray"):
++            dpnp.flatiter([1, 2, 3])
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_key_error(self, xp):
++        a = xp.array(42)
++        with pytest.raises(IndexError):
++            _ = a.flat[1]
+ 
+-    def test_flat_key_error(self):
+-        a_dp = dpnp.array(42)
+-        with pytest.raises(KeyError):
+-            _ = a_dp.flat[1]
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_invalid_key(self, xp):
++        flat = xp.array([1, 2, 3]).flat
+ 
+-    def test_flat_invalid_key(self):
+-        a_dp = dpnp.array([1, 2, 3])
+-        flat = dpnp.flatiter(a_dp)
+         # check __getitem__
+-        with pytest.raises(TypeError):
++        with pytest.raises(IndexError):
+             _ = flat["invalid"]
++
+         # check __setitem__
+-        with pytest.raises(TypeError):
++        with pytest.raises(IndexError):
+             flat["invalid"] = 42
+ 
+-    def test_flat_out_of_bounds(self):
+-        a_dp = dpnp.array([1, 2, 3])
+-        flat = dpnp.flatiter(a_dp)
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_out_of_bounds(self, xp):
++        flat = xp.array([1, 2, 3]).flat
+         with pytest.raises(IndexError):
+             _ = flat[10]
++
++    @pytest.mark.parametrize(
++        "key",
++        [
++            slice(1, 4),
++            slice(None),
++            slice(None, None, 2),
++            slice(None, None, -1),
++            [0, 2, 4],
++            [-1, -2],
++            Ellipsis,
++        ],
++        ids=[
++            "slice",
++            "full_slice",
++            "step_slice",
++            "neg_step_slice",
++            "list",
++            "neg_list",
++            "...",
++        ],
++    )
++    def test_flat_getitem_index_types(self, key):
++        a = np.arange(1, 7).reshape(2, 3)
++        ia = dpnp.array(a)
++        assert_array_equal(ia.flat[key], a.flat[key])
++
++    @pytest.mark.parametrize(
++        "key",
++        [
++            slice(1, 4),
++            slice(None),
++            slice(None, None, 2),
++            slice(None, None, -1),
++            [0, 2, 4],
++            [-1, -2],
++            Ellipsis,
++        ],
++        ids=[
++            "slice",
++            "full_slice",
++            "step_slice",
++            "neg_step_slice",
++            "list",
++            "neg_list",
++            "...",
++        ],
++    )
++    def test_flat_setitem_index_types(self, key):
++        a = np.arange(1, 7).reshape(2, 3)
++        ia = dpnp.array(a)
++        a.flat[key] = 0
++        ia.flat[key] = 0
++        assert_array_equal(ia, a)
++
++    @pytest.mark.parametrize("index", [0, 5, -1, -6])
++    def test_flat_setitem_scalar(self, index):
++        a = np.arange(1, 7)
++        ia = dpnp.array(a)
++        a.flat[index] = 99
++        ia.flat[index] = 99
++        assert_array_equal(ia, a)
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    @pytest.mark.parametrize("index", [6, -7], ids=["oob", "neg_oob"])
++    def test_flat_setitem_scalar_out_of_bounds(self, xp, index):
++        a = xp.arange(1, 7)
++        with pytest.raises(IndexError, match="out of bounds"):
++            a.flat[index] = 0
++
++    @testing.with_requires("numpy>=2.4")
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_setitem_single_item_array_value(self, xp):
++        for index in (0, xp.array(0), np.int64(0)):
++            a = xp.arange(1, 7)
++            with pytest.raises(ValueError, match="single item"):
++                a.flat[index] = [1, 2, 3]
++
++    def test_flat_setitem_single_item_scalar_value(self):
++        a = np.arange(1, 7)
++        ia = dpnp.array(a)
++
++        a.flat[0] = 9
++        a.flat[np.array(1)] = np.asarray(8)
++
++        ia.flat[0] = 9
++        ia.flat[dpnp.array(1)] = dpnp.asarray(8)
++        assert_array_equal(ia, a)
++
++    def test_flat_setitem_length_one_slice_cycles(self):
++        a = np.arange(1, 7)
++        ia = dpnp.array(a)
++
++        a.flat[0:1] = [10, 20, 30]
++        ia.flat[0:1] = [10, 20, 30]
++        assert_array_equal(ia, a)
++
++    def test_flat_index_array(self):
++        a = np.arange(1, 7).reshape(2, 3)
++        ia = dpnp.array(a)
++
++        # int array index
++        assert_array_equal(ia.flat[dpnp.array([0, 3, 5])], a.flat[[0, 3, 5]])
++
++    def test_flat_usm_ndarray_index(self):
++        a = np.arange(1, 7)
++        ia = dpnp.array(a)
++
++        # a usm_ndarray index is validated and used like a dpnp array
++        usm_key = dpnp.array([0, 2, 4]).get_array()
++        assert_array_equal(ia.flat[usm_key], a.flat[[0, 2, 4]])
++        with pytest.raises(IndexError, match="out of bounds"):
++            _ = ia.flat[dpnp.array([100]).get_array()]
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_empty_index(self, xp):
++        a = xp.arange(1, 7)
++        assert_array_equal(a.flat[xp.array([], dtype=xp.intp)], a.flat[[]])
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_ragged_index(self, xp):
++        a = xp.arange(6)
++        with pytest.raises(ValueError):
++            _ = a.flat[[[1, 2], [3]]]
++
++    def test_flat_single_element_tuple(self):
++        a = np.arange(1, 7)
++        ia = dpnp.array(a)
++
++        # a 1-element index tuple is equivalent to the bare index
++        assert_array_equal(ia.flat[(0,)], a.flat[(0,)])
++        assert_array_equal(ia.flat[(slice(1, 4),)], a.flat[(slice(1, 4),)])
++        assert_array_equal(
++            ia.flat[(dpnp.array([0, 2]),)], a.flat[(np.array([0, 2]),)]
++        )
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    @pytest.mark.parametrize(
++        "key",
++        [(Ellipsis, 2), (2, Ellipsis), (Ellipsis, slice(1, 3)), (1, 2)],
++        ids=["ell_int", "int_ell", "ell_slice", "int_int"],
++    )
++    def test_flat_multi_element_tuple(self, xp, key):
++        a = xp.arange(6)
++        with pytest.raises(IndexError):
++            _ = a.flat[key]
++        with pytest.raises(IndexError):
++            a.flat[key] = 0
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_tuple_array_out_of_bounds(self, xp):
++        a = xp.array([1, 2, 3])
++        idx = (xp.array([5]),)
++        with pytest.raises(IndexError, match="out of bounds"):
++            _ = a.flat[idx]
++        with pytest.raises(IndexError, match="out of bounds"):
++            a.flat[idx] = 0
++
++    @pytest.mark.parametrize("mask_type", ["dpnp", "numpy", "usm"])
++    def test_flat_bool_mask(self, mask_type):
++        a = np.arange(1, 7).reshape(2, 3)
++        ia = dpnp.array(a)
++        mask = np.array([True, False] * 3)
++        if mask_type == "dpnp":
++            key = dpnp.array(mask)
++        elif mask_type == "numpy":
++            key = mask
++        else:
++            key = dpt.asarray(mask)
++
++        # getitem via bool mask
++        assert_array_equal(ia.flat[key], a.flat[mask])
++
++        # setitem via bool mask
++        a.flat[mask] = -1
++        ia.flat[key] = -1
++        assert_array_equal(ia, a)
++
++    def test_flat_bool_mask_empty(self):
++        a = np.arange(6)
++        ia = dpnp.array(a)
++        mask = np.array([], dtype=bool)
++
++        assert_array_equal(ia.flat[dpnp.array(mask)], a.flat[mask])
++
++        a.flat[mask] = 9
++        ia.flat[dpnp.array(mask)] = 9
++        assert_array_equal(ia, a)
++
++    @testing.with_requires("numpy>=2.4")
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_bool_mask_wrong_size(self, xp):
++        a = xp.arange(6)
++        mask = xp.array([True, False, True])
++        with pytest.raises(IndexError):
++            _ = a.flat[mask]
++        with pytest.raises(IndexError):
++            a.flat[mask] = 0
++
++    @testing.with_requires("numpy>=2.4")
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_boolean_list_index(self, xp):
++        a = xp.arange(6)
++        mask = [True, False, True, False, True, False]
++        with pytest.raises(IndexError):
++            _ = a.flat[mask]
++        with pytest.raises(IndexError):
++            a.flat[mask] = 0
++
++    @pytest.mark.parametrize("index", [True, False])
++    def test_flat_boolean_scalar_index(self, index):
++        a = dpnp.arange(6)
++        with pytest.raises(IndexError):
++            _ = a.flat[index]
++        with pytest.raises(IndexError):
++            a.flat[index] = 9
++        with pytest.raises(IndexError):
++            _ = a.flat[dpnp.array(index)]
++
++    def test_flat_non_contiguous(self):
++        # C-order traversal + write-back for non-contiguous arrays
++        a = np.arange(1, 7).reshape(2, 3).T
++        ia = dpnp.array(np.arange(1, 7).reshape(2, 3)).T
++        assert_array_equal(ia.flat[1:5], a.flat[1:5])
++        a.flat[1:5] = 0
++        ia.flat[1:5] = 0
++        assert_array_equal(ia, a)
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_getitem_returns_copy(self, xp):
++        # flat yields copies, not views
++        a = xp.arange(10)
++        s = a.flat[1:4]
++        s[0] = 999
++        assert a[1] != 999
++
++    def test_flat_scalar_getitem_returns_copy(self):
++        # dpnp returns a 0-d array copy (NumPy returns an immutable scalar)
++        ia = dpnp.arange(10)
++        x = ia.flat[3]
++        x[...] = 777
++        assert ia[3] != 777
++
++    @testing.with_requires("numpy>=2.4")
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_newaxis(self, xp):
++        a = xp.array([1, 2, 3])
++        with pytest.raises(IndexError, match="are valid indices"):
++            _ = a.flat[None]
++        with pytest.raises(IndexError, match="are valid indices"):
++            a.flat[None] = 0
++
++    @testing.with_requires("numpy>=2.4")
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    def test_flat_empty_tuple(self, xp):
++        a = xp.arange(1, 7).reshape(2, 3)
++        # getitem with () returns the whole flattened array
++        assert_array_equal(a.flat[()], xp.arange(1, 7))
++        # setitem with a 0-d index is unsupported
++        with pytest.raises(IndexError, match="0-D index is not supported"):
++            a.flat[()] = 0
++
++    @pytest.mark.parametrize("xp", [dpnp, np])
++    @pytest.mark.parametrize("key", [[100], [-100]], ids=["oob", "neg_oob"])
++    def test_flat_array_out_of_bounds(self, xp, key):
++        a = xp.array([1, 2, 3])
++        with pytest.raises(IndexError, match="out of bounds for size"):
++            _ = a.flat[key]
++        with pytest.raises(IndexError, match="out of bounds for size"):
++            a.flat[key] = 0
++
++    @pytest.mark.parametrize("key", [[1, 9], [-9, 0]], ids=["oob", "neg_oob"])
++    def test_flat_setitem_out_of_bounds_empty_value(self, key):
++        # dpnp validates the index even for an empty value (NumPy no-ops here)
++        ia = dpnp.arange(6)
++        with pytest.raises(IndexError, match="out of bounds for size"):
++            ia.flat[key] = []
+diff --git a/dpnp/tests/third_party/cupy/indexing_tests/test_iterate.py b/dpnp/tests/third_party/cupy/indexing_tests/test_iterate.py
+index f68af146dd6..2030104a443 100644
+--- a/dpnp/tests/third_party/cupy/indexing_tests/test_iterate.py
++++ b/dpnp/tests/third_party/cupy/indexing_tests/test_iterate.py
+@@ -1,3 +1,5 @@
++from __future__ import annotations
++
+ import unittest
+ import warnings
+ 
+@@ -58,17 +60,17 @@ class TestFlatiter(unittest.TestCase):
+ 
+ 
+ @testing.parameterize(
+-    # {"shape": (2, 3, 4), "index": Ellipsis},
++    {"shape": (2, 3, 4), "index": Ellipsis},
+     {"shape": (2, 3, 4), "index": 0},
+     {"shape": (2, 3, 4), "index": 10},
+-    # {"shape": (2, 3, 4), "index": slice(None)},
+-    # {"shape": (2, 3, 4), "index": slice(None, 10)},
+-    # {"shape": (2, 3, 4), "index": slice(None, None, 2)},
+-    # {"shape": (2, 3, 4), "index": slice(None, None, -1)},
+-    # {"shape": (2, 3, 4), "index": slice(10, None, -1)},
+-    # {"shape": (2, 3, 4), "index": slice(10, None, -2)},
+-    # {"shape": (), "index": slice(None)},
+-    # {"shape": (10,), "index": slice(None)},
++    {"shape": (2, 3, 4), "index": slice(None)},
++    {"shape": (2, 3, 4), "index": slice(None, 10)},
++    {"shape": (2, 3, 4), "index": slice(None, None, 2)},
++    {"shape": (2, 3, 4), "index": slice(None, None, -1)},
++    {"shape": (2, 3, 4), "index": slice(10, None, -1)},
++    {"shape": (2, 3, 4), "index": slice(10, None, -2)},
++    {"shape": (), "index": slice(None)},
++    {"shape": (10,), "index": slice(None)},
+ )
+ class TestFlatiterSubscript(unittest.TestCase):
+ 
+@@ -125,12 +127,13 @@ class TestFlatiterSubscript(unittest.TestCase):
+ 
+ @testing.parameterize(
+     {"shape": (2, 3, 4), "index": None},
+-    {"shape": (2, 3, 4), "index": (0,)},
++    # the indices below are valid for flat iterators since NumPy 2.4
++    # (numpy-gh-28590) and no longer raise an IndexError:
++    # {"shape": (2, 3, 4), "index": (0,)},
+     {"shape": (2, 3, 4), "index": True},
+-    {"shape": (2, 3, 4), "index": cupy.array([0])},
+-    {"shape": (2, 3, 4), "index": [0]},
++    # {"shape": (2, 3, 4), "index": cupy.array([0])},
++    # {"shape": (2, 3, 4), "index": [0]},
+ )
+-@pytest.mark.skip("no exception raised")
+ class TestFlatiterSubscriptIndexError(unittest.TestCase):
+ 
+     @testing.for_all_dtypes()

@@ -1,0 +1,15 @@
+diff --git a/dpnp/dpnp_utils/dpnp_utils_pad.py b/dpnp/dpnp_utils/dpnp_utils_pad.py
+--- a/dpnp/dpnp_utils/dpnp_utils_pad.py
++++ b/dpnp/dpnp_utils/dpnp_utils_pad.py
+@@ -308,9 +308,9 @@
+         if isinstance(width, int):
+             seq[axis] = (width, width)
+         elif (
+-            isinstance(width, tuple)
++            not (isinstance(width, tuple)
+             and len(width) == 2
+-            and all(isinstance(w, int) for w in width)
++            and all(isinstance(w, int) for w in width))
+         ):
+             seq[axis] = width
+         else:

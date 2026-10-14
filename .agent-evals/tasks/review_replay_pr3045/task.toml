@@ -1,0 +1,18 @@
+version = "1.0"
+
+[metadata]
+family = "review"
+status = "draft"
+base = "51ba908112543574db96afa8f965639394a08715"
+created = "2026-09-29"
+source = "https://github.com/IntelPython/dpnp/pull/3045"
+difficulty = "hard"
+tags = ["flatiter", "indexing", "review_replay"]
+
+[agent]
+timeout_sec = 1800
+
+[grader]
+type = "review_replay"
+review_title = "Fix `dpnp.ndarray.flat` indexing edge cases"
+# Score-only by default. To make it pass/fail, add e.g.: gate = ["recall>=0.4", "precision>=0.3"]

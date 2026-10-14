@@ -1,0 +1,23 @@
+version = "1.0"
+
+[metadata]
+family = "fix"
+status = "draft"
+base = "51ba908112543574db96afa8f965639394a08715"
+created = "2026-08-19"
+source = "https://github.com/IntelPython/dpnp/pull/3024"
+difficulty = "easy"
+tags = ["manipulation", "repeat", "validation", "tensor"]
+
+[agent]
+timeout_sec = 3600
+
+[verifier]
+timeout_sec = 1800
+
+[grader]
+type = "hidden_tests"
+targets = ["dpnp/tests/test_repoevals_fix_manipulation_repeat_nested_list.py"]
+regression_targets = ["dpnp/tests/test_manipulation.py::TestRepeat", "dpnp/tests/third_party/cupy/manipulation_tests/test_tiling.py"]
+root_cause_files = ["dpnp/dpnp_iface_manipulation.py","dpnp/tensor/_manipulation_functions.py"]
+gate = ["strict_pass"]

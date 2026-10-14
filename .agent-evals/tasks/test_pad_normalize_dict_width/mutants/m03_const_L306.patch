@@ -1,0 +1,12 @@
+diff --git a/dpnp/dpnp_utils/dpnp_utils_pad.py b/dpnp/dpnp_utils/dpnp_utils_pad.py
+--- a/dpnp/dpnp_utils/dpnp_utils_pad.py
++++ b/dpnp/dpnp_utils/dpnp_utils_pad.py
+@@ -303,7 +303,7 @@
+ 
+     """
+ 
+-    seq = [(0, 0)] * ndim
++    seq = [(1, 0)] * ndim
+     for axis, width in pad_width.items():
+         if isinstance(width, int):
+             seq[axis] = (width, width)

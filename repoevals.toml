@@ -1,0 +1,36 @@
+# repoevals configuration for dpnp — https://github.com/vchamarthi/repoevals
+#
+# Tasks run on CPU-only machines without a SYCL compiler: the installed dpnp release (see
+# .agent-evals/requirements.txt) provides the compiled extension modules, which `setup` copies into each
+# workspace next to the Python sources of the task's base. Tasks are therefore limited to changes in Python
+# code, at bases whose compiled sources are identical to that release.
+[repo]
+id = "dpnp"
+url = "https://github.com/IntelPython/dpnp"
+tasks = ".agent-evals/tasks"
+
+[guidance]
+globs = ["**/AGENTS.md", "**/CLAUDE.md", ".claude/**", ".github/copilot-instructions.md", ".github/instructions/*.md"]
+
+[policy]
+test_globs = ["dpnp/tests/**", "dpnp/tensor/tests/**", "dpnp/tests/third_party/**"]
+library_globs = ["dpnp/**"]
+protected_globs = ["dpnp/tests/skipped_tests*.tbl", "dpnp/tests/third_party/**/skipped*", "dpnp/tests/config.py"]
+
+[environment]
+setup = """python -I -c "
+import importlib.util, pathlib, shutil
+src = pathlib.Path(importlib.util.find_spec('dpnp').submodule_search_locations[0])
+for f in [*src.rglob('*.so'), src / '_version.py']:
+    dst = pathlib.Path(f.relative_to(src.parent))
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(f, dst)
+"
+"""
+setup_timeout_sec = 600
+
+[test]
+adapter = "pytest"
+command = "python -m pytest -q -p no:randomly -p no:cacheprovider {targets}"
+timeout_sec = 1800
+env = { ONEAPI_DEVICE_SELECTOR = "opencl:cpu", OMP_NUM_THREADS = "2" }

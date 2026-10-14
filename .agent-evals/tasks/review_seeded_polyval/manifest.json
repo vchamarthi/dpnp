@@ -1,0 +1,91 @@
+{
+ "seeds": [
+  {
+   "id": "S1",
+   "class": "correctness",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3989,
+    3991
+   ],
+   "kw": "dtype|promot|cast|integer|int\\b|in-?place|same_kind|truncat|result.type"
+  },
+  {
+   "id": "S2",
+   "class": "device",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3984
+   ],
+   "kw": "queue|device|usm|compute.follows.data|exec_q|placement|asarray"
+  },
+  {
+   "id": "S3",
+   "class": "numerical",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3991
+   ],
+   "kw": "horner|power|\\*\\*|overflow|accura|precision|numer|stab|round|ineffic|O\\(n"
+  },
+  {
+   "id": "S4",
+   "class": "validation",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3980,
+    3981
+   ],
+   "kw": "ravel|flatten|1-?d|ndim|dimension|2-?d|shape|silent"
+  },
+  {
+   "id": "S5",
+   "class": "hygiene",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3987
+   ],
+   "kw": "print|debug|stdout|log"
+  },
+  {
+   "id": "S6",
+   "class": "api",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3932,
+    3950,
+    3992
+   ],
+   "kw": "\\bout\\b|ignor|unused|signature|numpy\\.polyval"
+  },
+  {
+   "id": "S7",
+   "class": "tests",
+   "file": "dpnp/tests/test_mathematical.py",
+   "lines": [
+    1613,
+    1614
+   ],
+   "kw": "itself|same function|numpy|reference|expected|tautolog|vacuous|compar"
+  }
+ ],
+ "decoys": [
+  {
+   "id": "D1",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3978
+   ],
+   "kw": "get_usm_allocations"
+  },
+  {
+   "id": "D2",
+   "file": "dpnp/dpnp_iface_mathematical.py",
+   "lines": [
+    3976,
+    3977
+   ],
+   "kw": "check_supported_arrays_type"
+  }
+ ]
+}

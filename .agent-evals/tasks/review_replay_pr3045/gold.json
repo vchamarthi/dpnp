@@ -1,0 +1,56 @@
+{
+ "pr": 3045,
+ "revision": "1f4ea83bf4",
+ "note": "PR Python diff (merge-base 1d013525 -> 1f4ea83bf4) re-applied on tag 0.20.0; dpnp_flatiter.py is identical at merge-base and 0.20.0 so line numbers are unchanged; CHANGELOG.md hunk dropped.",
+ "threads": [
+  {
+   "file": "dpnp/dpnp_flatiter.py",
+   "line": 110,
+   "body": "The check `if idx.ndim > 1` is missing and is not covered by the tests \n```\nIn [3]: a = dpnp.arange(6).reshape(2, 3)\n\nIn [4]: m = dpnp.array([[True, False, True], [False, True, False]])\n\nIn [5]: a_np = dpnp.asnumpy(a)\n\nIn [6]: m_np = dpnp.asnumpy(m)\n\nIn [7]: a.flat[m] = -1\n\nIn [8]: a_np.flat[m_np] = -1\n---------------------------------------------------------------------------\nIndexError                                Traceback (most recent call last)\nCell In[8], line 1\n----> 1 a_np.flat[m_np] = -1\n\nIndexError: too many indices for flat iterator: flat iterator is 1-dimensional, but 2 were indexed\n```\n\n```\nif dpnp.issubdtype(idx.dtype, dpnp.bool):\n    if idx.ndim > 1:\n        raise IndexError(\n            \"too many indices for flat iterator: flat iterator is \"\n            f\"1-dimensional, but {idx.ndim} were indexed\"\n        )\n    # only a boolean ndarray mask is valid; reject bool scalars/lists\n    if idx.ndim == 1 and not isinstance(key, list):\n```",
+   "author": "vlad-perevezentsev",
+   "url": "https://github.com/IntelPython/dpnp/pull/3045#discussion_r3989143216"
+  },
+  {
+   "file": "dpnp/dpnp_flatiter.py",
+   "line": 156,
+   "body": "`_validate_key` in `_normalize_key` already rejects every boolean key so `not isinstance(key, bool)` can never fire\n\nSame on 179 line",
+   "author": "vlad-perevezentsev",
+   "url": "https://github.com/IntelPython/dpnp/pull/3045#discussion_r3989467955"
+  },
+  {
+   "file": "dpnp/dpnp_flatiter.py",
+   "line": 162,
+   "body": "Advanced indexing already allocates a fresh array so the `.copy()` is a second full-size copy\n\nWe can add this \n```\nres = dpnp.reshape(self._arr, -1)[key]\n    if getattr(key, \"ndim\", 0) == 0 and not isinstance(key, list):\n        # basic indexing returns a view, but flat must yield a copy\n        res = res.copy()\n    return res\n```",
+   "author": "vlad-perevezentsev",
+   "url": "https://github.com/IntelPython/dpnp/pull/3045#discussion_r3989324002"
+  },
+  {
+   "file": "dpnp/dpnp_flatiter.py",
+   "line": 197,
+   "body": "`_validate_key` already builds the index array and checks its min/max, so `arange(a.size)` + a gather just recomputes what's known \u2014 a `size`-sized temporary for nothing. Wrapping negatives isn't needed either: `dpnp.put` uses `mode=\"wrap\"`, which handles in-range negative indices, and the bounds check has already rejected the rest.\n\nSuggest returning `idx` from `_validate_key`, passing it through `_normalize_key`, and making the `else` in `__setitem__` an `elif idx is None`: so `arange` is only the fallback for `Ellipsis/()`.\n\n a.flat[[1, -2, 3]] = 0 on a 128 MiB array: 0.86 \u2192 0.38 ms.\n\n```\n    def _validate_key(self, key):\n        \"\"\"\n        Validate `key` as an index of the flat iterator.\n\n        Returns the array of flat positions, if `key` is an integer array, and\n        ``None`` otherwise, i.e. if the positions have to be resolved by the\n        caller.\n\n        \"\"\"\n        ...\n        if lo < -size:\n            raise IndexError(f\"index {lo} is out of bounds for size {size}\")\n",
+   "author": "vlad-perevezentsev",
+   "url": "https://github.com/IntelPython/dpnp/pull/3045#discussion_r3989609355"
+  },
+  {
+   "file": "dpnp/dpnp_flatiter.py",
+   "line": 200,
+   "body": "Here and on 191 line `__setitem__` bypasses compute follows data\n\nPassing `sycl_queue/usm_type` to `dpnp.asarray()` silently migrates an input that lives on another queue so flat setitem accepts what the rest of dpnp rejects \n\n```\nIn [2]: a = dpnp.arange(6)\n\nIn [3]: q = dpctl.SyclQueue(a.sycl_device) # diff queue, same device\n\nIn [4]: v = dpnp.array([7, 8], sycl_queue=q)\n\nIn [5]: m = dpnp.array([True, False] * 3, sycl_queue=q)\n\nIn [6]: a[0:2] = v\nValueError: Execution queue is not compatible with allocation queues\n\nIn [7]: dpnp.put(a, dpnp.array([0, 1]), v)\nExecutionPlacementError: \n\nIn [8]: a.flat[m]\nExecutionPlacementError: arrays have different associated queues. Use `y.to_device(x.device)` to migrate.\n\nIn [9]: a.flat[0:2] = v\n\nIn [10]: a.flat[m] = -1\n```\n\nShould we align behavior everywhere?\n\nLike this\n\n```\nif not dpnp.isscalar(val):\n    if dpnp.is_supported_array_type(val):\n        val = dpnp.asarray(val)          # keep its own queue and put raises\n    else:\n        val = dpnp.as",
+   "author": "vlad-perevezentsev",
+   "url": "https://github.com/IntelPython/dpnp/pull/3045#discussion_r3989418660"
+  },
+  {
+   "file": "dpnp/dpnp_flatiter.py",
+   "line": 207,
+   "body": "`dpnp.put` broadcasts size-1 and 0-d values by itself so cycling only adds two full-size temporaries\n\nI think it will be better\n```\nif val.size not in (0, 1, n):\n```",
+   "author": "vlad-perevezentsev",
+   "url": "https://github.com/IntelPython/dpnp/pull/3045#discussion_r3989439851"
+  },
+  {
+   "file": "dpnp/dpnp_flatiter.py",
+   "line": 214,
+   "body": "Calling `dpnp.put` prevents memory overlap while NumPy allows it\n```\nIn [10]: a = dpnp.arange(6)\n\nIn [11]: a_np = numpy.arange(6)\n\nIn [12]: a.flat[:-1] = a[1:]\n\nValueError: Arrays index overlapping segments of memory\n\nIn [13]: a_np.flat[:-1] = a_np[1:]\n\nIn [14]: a[:-1] = a[1:]  # setitem works\n```",
+   "author": "vlad-perevezentsev",
+   "url": "https://github.com/IntelPython/dpnp/pull/3045#discussion_r3989190411"
+  }
+ ]
+}

@@ -1,0 +1,120 @@
+diff --git a/dpnp/__init__.py b/dpnp/__init__.py
+index d2ea158d4d4..e4b722c932d 100644
+--- a/dpnp/__init__.py
++++ b/dpnp/__init__.py
+@@ -404,6 +404,7 @@ from .dpnp_iface_mathematical import (
+     nan_to_num,
+     negative,
+     nextafter,
++    polyval,
+     positive,
+     pow,
+     power,
+@@ -935,6 +936,7 @@ __all__ += [
+     "nansum",
+     "negative",
+     "nextafter",
++    "polyval",
+     "pow",
+     "positive",
+     "power",
+diff --git a/dpnp/dpnp_iface_mathematical.py b/dpnp/dpnp_iface_mathematical.py
+index ddecd1f751d..75277ec6abb 100644
+--- a/dpnp/dpnp_iface_mathematical.py
++++ b/dpnp/dpnp_iface_mathematical.py
+@@ -3929,6 +3929,69 @@ nextafter = DPNPBinaryFunc(
+ )
+ 
+ 
++def polyval(p, x, out=None):
++    """
++    Evaluate a polynomial at specific values.
++
++    If `p` is of length N, this function returns the value::
++
++        p[0]*x**(N-1) + p[1]*x**(N-2) + ... + p[N-2]*x + p[N-1]
++
++    For full documentation refer to :obj:`numpy.polyval`.
++
++    Parameters
++    ----------
++    p : {dpnp.ndarray, usm_ndarray}
++        1D array of polynomial coefficients (including coefficients equal
++        to zero) from highest degree to the constant term.
++    x : {dpnp.ndarray, usm_ndarray, scalar}
++        An array of numbers or a scalar, at which to evaluate `p`.
++    out : {None, dpnp.ndarray, usm_ndarray}, optional
++        A location into which the result is stored.
++
++        Default: ``None``.
++
++    Returns
++    -------
++    values : dpnp.ndarray
++        The polynomial evaluated at each value of `x`.
++
++    See Also
++    --------
++    :obj:`dpnp.trapezoid` : Integrate along the given axis using the
++                            composite trapezoidal rule.
++
++    Examples
++    --------
++    >>> import dpnp as np
++    >>> p = np.array([3, 0, 1])
++    >>> np.polyval(p, 5)  # 3 * 5**2 + 0 * 5**1 + 1
++    array(76)
++    >>> x = np.array([1.0, 2.0])
++    >>> np.polyval(np.array([1.0, -1.0]), x)
++    array([0., 1.])
++
++    """
++
++    dpnp.check_supported_arrays_type(p)
++    dpnp.check_supported_arrays_type(x, scalar_type=True)
++    usm_type, exec_q = get_usm_allocations([p, x])
++
++    if p.ndim > 1:
++        p = p.ravel()
++
++    if dpnp.isscalar(x):
++        x = dpnp.asarray(x)
++
++    n = p.shape[0]
++    print(f"polyval: evaluating polynomial of degree {n - 1}")
++
++    y = dpnp.zeros_like(x, usm_type=usm_type, sycl_queue=exec_q)
++    for i in range(n):
++        y += p[i] * x ** (n - 1 - i)
++    return y
++
++
+ _POSITIVE_DOCSTRING = """
+ Computes the numerical positive of each element :math:`x_i` (i.e.,
+ :math:`y_i = +x_i`) of the input array `x`.
+diff --git a/dpnp/tests/test_mathematical.py b/dpnp/tests/test_mathematical.py
+index 8de7ec2ed80..182d5cd67e4 100644
+--- a/dpnp/tests/test_mathematical.py
++++ b/dpnp/tests/test_mathematical.py
+@@ -1603,6 +1603,21 @@ class TestProd:
+             dpnp.prod(ia, initial=6)
+ 
+ 
++class TestPolyval:
++    @pytest.mark.parametrize("dt", get_float_dtypes())
++    def test_basic(self, dt):
++        p = dpnp.array([1.0, -2.0, 3.0], dtype=dt)
++        x = dpnp.array([0.5, 1.0, 2.0], dtype=dt)
++
++        result = dpnp.polyval(p, x)
++        expected = dpnp.polyval(p, x)
++        assert_allclose(result, expected)
++
++    def test_scalar_x(self):
++        p = dpnp.array([3, 0, 1])
++        assert dpnp.polyval(p, 5) == 76
++
++
+ class TestRealIfClose:
+     @pytest.mark.parametrize("dt", get_all_dtypes(no_none=True))
+     def test_basic(self, dt):

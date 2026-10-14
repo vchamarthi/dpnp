@@ -1,0 +1,3 @@
+dpnp==0.20.0
+pytest
+pytest-xdist

@@ -1,0 +1,18 @@
+diff --git a/dpnp/dpnp_algo/dpnp_arraycreation.py b/dpnp/dpnp_algo/dpnp_arraycreation.py
+index 44b852e32e2..ff83209f4d2 100644
+--- a/dpnp/dpnp_algo/dpnp_arraycreation.py
++++ b/dpnp/dpnp_algo/dpnp_arraycreation.py
+@@ -356,11 +356,10 @@ class dpnp_nd_grid:
+             if start is None:
+                 start = 0
+             if isinstance(step, complex):
+-                step = abs(step)
+-                length = int(step)
++                step_float = abs(step)
++                step = length = int(step_float)
+                 if step != 1:
+                     step = (stop - start) / float(step - 1)
+-                stop = stop + step
+                 return (
+                     dpnp.arange(
+                         0,

@@ -1,0 +1,13 @@
+diff --git a/dpnp/dpnp_utils/dpnp_utils_pad.py b/dpnp/dpnp_utils/dpnp_utils_pad.py
+index f00264ceddb..437e4b9c3fc 100644
+--- a/dpnp/dpnp_utils/dpnp_utils_pad.py
++++ b/dpnp/dpnp_utils/dpnp_utils_pad.py
+@@ -305,7 +305,7 @@ def _pad_normalize_dict_width(pad_width, ndim):
+     seq = [(0, 0)] * ndim
+     for axis, width in pad_width.items():
+         if isinstance(width, int):
+-            seq[axis] = (width, width)
++            seq[axis] = (0, width)
+         elif (
+             isinstance(width, tuple)
+             and len(width) == 2

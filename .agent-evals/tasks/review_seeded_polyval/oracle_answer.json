@@ -1,0 +1,9 @@
+[
+ {"file": "dpnp/dpnp_iface_mathematical.py", "line": 3989, "severity": "major", "rule": "dtype-promotion", "message": "The accumulator takes the dtype of x and is updated in-place, so integer x with float coefficients fails the same_kind cast (or truncates) instead of promoting like numpy.polyval."},
+ {"file": "dpnp/dpnp_iface_mathematical.py", "line": 3984, "severity": "major", "rule": "compute-follows-data", "message": "dpnp.asarray(x) allocates a scalar x on the default device/queue, ignoring exec_q and usm_type from get_usm_allocations, so p on another queue breaks compute follows data."},
+ {"file": "dpnp/dpnp_iface_mathematical.py", "line": 3991, "severity": "major", "rule": "numerical-stability", "message": "Evaluating each term with x ** (n - 1 - i) instead of Horner's scheme is less accurate, overflows earlier for large degree, and costs O(n^2) multiplications."},
+ {"file": "dpnp/dpnp_iface_mathematical.py", "line": 3981, "severity": "major", "rule": "input-validation", "message": "Coefficients with ndim > 1 are silently flattened with ravel instead of being rejected or handled like NumPy, producing a wrong-degree polynomial."},
+ {"file": "dpnp/dpnp_iface_mathematical.py", "line": 3987, "severity": "minor", "rule": "debug-print", "message": "Leftover debug print writes to stdout on every call; remove it."},
+ {"file": "dpnp/dpnp_iface_mathematical.py", "line": 3932, "severity": "major", "rule": "api-out-ignored", "message": "The out parameter is documented and accepted but ignored (never written or validated), and numpy.polyval has no out argument."},
+ {"file": "dpnp/tests/test_mathematical.py", "line": 1613, "severity": "major", "rule": "tautological-test", "message": "The test compares dpnp.polyval against itself instead of numpy.polyval as reference, so it can never fail; integer/mixed dtype, scalar and device cases are untested."}
+]

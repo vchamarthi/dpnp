@@ -1,0 +1,18 @@
+version = "1.0"
+
+[metadata]
+family = "review"
+status = "draft"
+base = "51ba908112543574db96afa8f965639394a08715"
+created = "2026-10-13"
+source = "seeded"
+difficulty = "medium"
+tags = ["review_seeded", "polyval", "mathematical"]
+
+[agent]
+timeout_sec = 1800
+
+[grader]
+type = "review_seeded"
+review_title = "Add dpnp.polyval"
+gate = ["recall>=0.6", "precision>=0.5", "decoys_flagged<=0"]

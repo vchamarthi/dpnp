@@ -1,0 +1,51 @@
+diff --git a/dpnp/dpnp_iface_statistics.py b/dpnp/dpnp_iface_statistics.py
+index bf27fc98a4c..5a98706ea0f 100644
+--- a/dpnp/dpnp_iface_statistics.py
++++ b/dpnp/dpnp_iface_statistics.py
+@@ -1428,17 +1428,23 @@ def ptp(
+         the output values will be cast if necessary.
+ 
+         Default: ``None``.
+-    keepdims : {None, bool}, optional
++    keepdims : bool, optional
+         If this is set to ``True``, the axes which are reduced are left in the
+         result as dimensions with size one. With this option, the result will
+         broadcast correctly against the input array.
+ 
+-        Default: ``None``.
++        Default: ``False``.
+ 
+     Returns
+     -------
+     ptp : dpnp.ndarray
+-        The range of a given array.
++        The range of a given array. If `axis` is ``None``, the result is a
++        zero-dimensional array.
++
++    See Also
++    --------
++    :obj:`dpnp.max` : Return the maximum along a given axis.
++    :obj:`dpnp.min` : Return the minimum along a given axis.
+ 
+     Examples
+     --------
+diff --git a/dpnp/tests/test_statistics.py b/dpnp/tests/test_statistics.py
+index a02adfac2ec..5184b4f02c4 100644
+--- a/dpnp/tests/test_statistics.py
++++ b/dpnp/tests/test_statistics.py
+@@ -1063,6 +1063,15 @@ class TestPtp:
+         dpnp.ptp(ia, axis, out=result)
+         assert_array_equal(result, expected)
+ 
++    @pytest.mark.parametrize("axis", [None, 0, 1, (0, 1)])
++    def test_keepdims(self, axis):
++        a = numpy.array([[4, 9, 2, 10], [6, 9, 7, 12]])
++        ia = dpnp.array(a)
++
++        expected = numpy.ptp(a, axis=axis, keepdims=True)
++        result = dpnp.ptp(ia, axis=axis, keepdims=True)
++        assert_array_equal(result, expected)
++
+ 
+ @pytest.mark.parametrize("func", ["std", "var"])
+ class TestStdVar:

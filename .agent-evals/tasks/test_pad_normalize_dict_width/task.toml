@@ -1,0 +1,20 @@
+version = "1.0"
+
+[metadata]
+family = "test"
+status = "draft"
+base = "51ba908112543574db96afa8f965639394a08715"
+created = "2026-10-13"
+source = "mutants of dpnp/dpnp_utils/dpnp_utils_pad.py"
+tags = ["pad", "mutation"]
+
+[agent]
+timeout_sec = 2400
+
+[verifier]
+timeout_sec = 1800
+
+[grader]
+type = "mutation"
+min_kill = 0.8
+oracle_min_kill = 1.0
