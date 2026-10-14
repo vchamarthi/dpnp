@@ -40,7 +40,8 @@ jobs:
           python -m pip install -r .agent-evals/requirements.txt intel-opencl-rt \
             "repoevals @ git+https://github.com/vchamarthi/repoevals@main"
           P=$(python -c "import sys; print(sys.prefix)")
-          echo "OCL_ICD_VENDORS=$P/etc/OpenCL/vendors" >> "$GITHUB_ENV"
+          # the wheel's intel-cpu.icd points at a conda placeholder prefix; name the CPU driver directly
+          echo "OCL_ICD_FILENAMES=$P/lib/libintelocl.so" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$P/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
       - name: dpnp runs on the CPU device
         run: |
